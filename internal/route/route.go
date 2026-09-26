@@ -12,10 +12,23 @@ import (
 
 // New wires the API routes and middleware.
 func New(h *handler.RateHandler, logger *slog.Logger, allowedOrigins []string) http.Handler {
+	routes := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/api/health", h.Health},
+		{"/api/rates", h.Rates},
+		{"/api/currencies", h.Currencies},
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", h.Health)
-	mux.HandleFunc("GET /api/rates", h.Rates)
-	mux.HandleFunc("GET /api/currencies", h.Currencies)
+	for _, r := range routes {
+		mux.HandleFunc("GET "+r.path, r.handler)
+		// Other methods on the same path, answered in the JSON envelope
+		// instead of the mux's plain-text 405.
+		mux.HandleFunc(r.path, handler.MethodNotAllowed)
+	}
+	mux.HandleFunc("/", handler.NotFound)
 
 	return recoverPanics(logger, logRequests(logger, cors(allowedOrigins, mux)))
 }

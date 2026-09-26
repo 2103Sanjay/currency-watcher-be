@@ -1,7 +1,6 @@
 package handler_test
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,15 +14,11 @@ import (
 	"github.com/2103Sanjay/currency-watcher-be/test/testutil"
 )
 
-// ratesBody mirrors the JSON body of GET /api/rates.
+// ratesBody mirrors the data of GET /api/rates.
 type ratesBody struct {
 	Base   string             `json:"base"`
 	Rates  map[string]float64 `json:"rates"`
 	Cached bool               `json:"cached"`
-}
-
-type errorBody struct {
-	Error string `json:"error"`
 }
 
 func newHandler(svc *testutil.FakeService) *handler.RateHandler {
@@ -46,12 +41,10 @@ func TestHealth(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	var body map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	if body["status"] != "ok" || body["version"] != "test" {
-		t.Errorf("unexpected body: %v", body)
+	var data map[string]string
+	testutil.DecodeResponse(t, rec.Body, http.StatusOK, &data)
+	if data["version"] != "test" {
+		t.Errorf("unexpected data: %v", data)
 	}
 }
 
@@ -111,19 +104,14 @@ func TestRates(t *testing.T) {
 				t.Errorf("Content-Type = %q", ct)
 			}
 			if tc.wantStatus != http.StatusOK {
-				var body errorBody
-				if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body.Error == "" {
-					t.Errorf("expected JSON error body, got %q", rec.Body)
-				}
+				testutil.DecodeResponse(t, rec.Body, tc.wantStatus, nil)
 				return
 			}
 			if svc.GotBase != tc.wantBase || !reflect.DeepEqual(svc.GotTargets, tc.wantTargets) {
 				t.Errorf("service got base=%q targets=%v, want %q %v", svc.GotBase, svc.GotTargets, tc.wantBase, tc.wantTargets)
 			}
 			var body ratesBody
-			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-				t.Fatal(err)
-			}
+			testutil.DecodeResponse(t, rec.Body, http.StatusOK, &body)
 			if body.Base != tc.wantBase || !body.Cached {
 				t.Errorf("unexpected body: %+v", body)
 			}
@@ -149,12 +137,11 @@ func TestCurrencies(t *testing.T) {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
 			}
 			if tc.wantStatus != http.StatusOK {
+				testutil.DecodeResponse(t, rec.Body, tc.wantStatus, nil)
 				return
 			}
 			var list []model.Currency
-			if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
-				t.Fatal(err)
-			}
+			testutil.DecodeResponse(t, rec.Body, http.StatusOK, &list)
 			if len(list) != 1 || list[0].Code != "EUR" {
 				t.Errorf("unexpected currencies: %+v", list)
 			}

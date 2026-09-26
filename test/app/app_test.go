@@ -2,7 +2,6 @@ package app_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -80,11 +79,9 @@ func getRates(t *testing.T, url string) map[string]any {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET %s: status %d", url, resp.StatusCode)
 	}
-	var body map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	return body
+	var data map[string]any
+	testutil.DecodeResponse(t, resp.Body, http.StatusOK, &data)
+	return data
 }
 
 // TestRunEndToEnd starts the real server against a fake upstream, checks the

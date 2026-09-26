@@ -4,7 +4,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -34,7 +33,7 @@ func NewRateHandler(svc service.RateService, logger *slog.Logger, version string
 	return &RateHandler{svc: svc, logger: logger, version: version}
 }
 
-// ratesResponse is the JSON body of GET /api/rates.
+// ratesResponse is the data of GET /api/rates.
 type ratesResponse struct {
 	Base      string             `json:"base"`
 	Date      string             `json:"date"`
@@ -45,13 +44,14 @@ type ratesResponse struct {
 	Stale     bool               `json:"stale"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
+// healthResponse is the data of GET /api/health.
+type healthResponse struct {
+	Version string `json:"version"`
 }
 
 // Health handles GET /api/health.
 func (h *RateHandler) Health(w http.ResponseWriter, _ *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": h.version})
+	WriteSuccess(w, http.StatusOK, "Service is healthy", healthResponse{Version: h.version})
 }
 
 // Rates handles GET /api/rates?base=USD&targets=EUR,SGD.
@@ -80,7 +80,7 @@ func (h *RateHandler) Rates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, ratesResponse{
+	WriteSuccess(w, http.StatusOK, "Exchange rates fetched successfully", ratesResponse{
 		Base:      res.Base,
 		Date:      res.Date,
 		Rates:     res.Rates,
@@ -98,7 +98,7 @@ func (h *RateHandler) Currencies(w http.ResponseWriter, r *http.Request) {
 		h.handleServiceError(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, list)
+	WriteSuccess(w, http.StatusOK, "Currencies fetched successfully", list)
 }
 
 func (h *RateHandler) handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
@@ -143,16 +143,4 @@ func parseTargets(raw string) ([]string, error) {
 
 func normalise(code string) string {
 	return strings.ToUpper(strings.TrimSpace(code))
-}
-
-// WriteJSON writes body as a JSON response with the given status.
-func WriteJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-// WriteError writes a {"error": msg} JSON response with the given status.
-func WriteError(w http.ResponseWriter, status int, msg string) {
-	WriteJSON(w, status, errorResponse{Error: msg})
 }

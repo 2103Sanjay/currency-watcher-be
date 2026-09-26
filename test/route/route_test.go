@@ -1,7 +1,6 @@
 package route_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,15 +27,25 @@ func TestRoutes(t *testing.T) {
 		{http.MethodGet, "/api/health", http.StatusOK},
 		{http.MethodGet, "/api/rates?base=USD&targets=EUR", http.StatusOK},
 		{http.MethodGet, "/api/currencies", http.StatusOK},
+		{http.MethodHead, "/api/health", http.StatusOK},
 		{http.MethodPost, "/api/rates?base=USD", http.StatusMethodNotAllowed},
+		{http.MethodDelete, "/api/currencies", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/api/nope", http.StatusNotFound},
+		{http.MethodGet, "/", http.StatusNotFound},
 	}
 	for _, tc := range tests {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			newRouter(&testutil.FakeService{}).ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
 			if rec.Code != tc.wantStatus {
-				t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			if tc.method == http.MethodHead {
+				return // no body
+			}
+			testutil.DecodeResponse(t, rec.Body, tc.wantStatus, nil)
+			if tc.wantStatus == http.StatusMethodNotAllowed && rec.Header().Get("Allow") == "" {
+				t.Error("405 response is missing the Allow header")
 			}
 		})
 	}
@@ -100,13 +109,8 @@ func TestRecoverPanics(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	var body struct {
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(body.Error, "boom") {
-		t.Errorf("panic value leaked to client: %q", body.Error)
+	env := testutil.DecodeResponse(t, rec.Body, http.StatusInternalServerError, nil)
+	if strings.Contains(env.Message, "boom") {
+		t.Errorf("panic value leaked to client: %q", env.Message)
 	}
 }

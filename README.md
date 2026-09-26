@@ -34,21 +34,48 @@ go test ./...          # add -race if you have a C toolchain
 
 All optional, via environment variables:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` | `8080` | HTTP listen port |
-| `CACHE_TTL` | `1h` | How long a fetched rate table stays fresh (Go duration) |
-| `UPSTREAM_TIMEOUT` | `10s` | Timeout for calls to Frankfurter |
-| `RATES_API_URL` | `https://api.frankfurter.dev/v2` | Upstream API base URL |
-| `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allow-list (`*` for any) |
+| Variable           | Default                          | Purpose                                                 |
+| ------------------ | -------------------------------- | ------------------------------------------------------- |
+| `PORT`             | `8080`                           | HTTP listen port                                        |
+| `CACHE_TTL`        | `1h`                             | How long a fetched rate table stays fresh (Go duration) |
+| `UPSTREAM_TIMEOUT` | `10s`                            | Timeout for calls to Frankfurter                        |
+| `RATES_API_URL`    | `https://api.frankfurter.dev/v2` | Upstream API base URL                                   |
+| `ALLOWED_ORIGINS`  | `http://localhost:5173`          | Comma-separated CORS allow-list (`*` for any)           |
 
 ---
 
 ## API
 
+### Response format
+
+Every response, successful or not, uses the same envelope:
+
+```json
+{
+  "status": "Success",
+  "message": "Exchange rates fetched successfully",
+  "status_code": 200,
+  "data": { },
+  "timestamp": "2026-09-26T08:33:35Z"
+}
+```
+
+Failures have `"status": "Failed"`, a human-readable `message`, and no `data`:
+
+```json
+{
+  "status": "Failed",
+  "message": "unknown currency: XYZ",
+  "status_code": 400,
+  "timestamp": "2026-09-26T08:33:35Z"
+}
+```
+
+`status_code` always matches the HTTP status. This also applies to unknown paths (`404`), unsupported methods (`405`) and unexpected server errors (`500`).
+
 ### `GET /api/rates?base=USD&targets=EUR,SGD`
 
-Returns the rate from `base` to each target. `targets` is optional; if omitted, every available rate for `base` is returned. Codes are case-insensitive.
+Returns the rate from `base` to each target. `targets` is optional; if omitted, every available rate for `base` is returned. Codes are case-insensitive. `data`:
 
 ```json
 {
@@ -70,15 +97,13 @@ Returns the rate from `base` to each target. `targets` is optional; if omitted, 
 | `400` | Missing/invalid `base`, invalid target code, or a currency Frankfurter doesn't support |
 | `502` | Frankfurter is unavailable and nothing is cached for that base |
 
-Errors are returned as `{"error": "message"}`.
-
 ### `GET /api/health`
 
-`{"status":"ok","version":"<git sha>"}`
+`data` is `{"version":"<git sha>"}`.
 
 ### `GET /api/currencies`
 
-The currencies currently supported, `[{"code":"EUR","name":"Euro"}, ...]`. The dashboard uses this list to suggest and validate codes.
+`data` is the list of currencies currently supported, `[{"code":"EUR","name":"Euro"}, ...]`. The dashboard uses this list to suggest and validate codes.
 
 ---
 
@@ -86,17 +111,17 @@ The currencies currently supported, `[{"code":"EUR","name":"Euro"}, ...]`. The d
 
 Everything in AWS is defined in [`terraform/`](terraform/). By default it deploys to `ap-south-1` (Mumbai).
 
-| File | Contents |
-| --- | --- |
-| `versions.tf` | Terraform and AWS provider version pins |
-| `variables.tf` | Every input: region, environment, instance type, app/host ports, CORS origins, cache TTL, GitHub repo, … |
-| `main.tf` | Provider (with default tags on every resource), shared lookups (the latest Amazon Linux 2023 image) |
-| `network.tf` | Dedicated VPC, public subnet, internet gateway, security group (API port only; no SSH) |
-| `ecr.tf` | Private image registry, with scan-on-push and a lifecycle rule keeping the last 10 images |
-| `ec2.tf` | Instance role (SSM + ECR pull), EC2 instance (IMDSv2, encrypted disk), Elastic IP |
-| `github_oidc.tf` | GitHub OIDC provider and the least-privilege deploy role used by CI/CD |
-| `outputs.tf` | API URL, instance ID, role ARN, and the exact GitHub variables to set |
-| `templates/user_data.sh.tftpl` | First-boot script: installs Docker, writes app config, starts the latest image if any |
+| File                           | Contents                                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `versions.tf`                  | Terraform and AWS provider version pins                                                                  |
+| `variables.tf`                 | Every input: region, environment, instance type, app/host ports, CORS origins, cache TTL, GitHub repo, … |
+| `main.tf`                      | Provider (with default tags on every resource), shared lookups (the latest Amazon Linux 2023 image)      |
+| `network.tf`                   | Dedicated VPC, public subnet, internet gateway, security group (API port only; no SSH)                   |
+| `ecr.tf`                       | Private image registry, with scan-on-push and a lifecycle rule keeping the last 10 images                |
+| `ec2.tf`                       | Instance role (SSM + ECR pull), EC2 instance (IMDSv2, encrypted disk), Elastic IP                        |
+| `github_oidc.tf`               | GitHub OIDC provider and the least-privilege deploy role used by CI/CD                                   |
+| `outputs.tf`                   | API URL, instance ID, role ARN, and the exact GitHub variables to set                                    |
+| `templates/user_data.sh.tftpl` | First-boot script: installs Docker, writes app config, starts the latest image if any                    |
 
 ### Recreate the infrastructure
 
@@ -126,11 +151,11 @@ The workflow is [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
  pull request ─► Test ─► Build image
 ```
 
-| Job | What it does |
-| --- | --- |
-| **Test** | `gofmt` check, `go vet`, `go test -race` with coverage (shown in the run summary) |
-| **Build image** | Builds the Docker image with the commit SHA baked in, runs it, and checks that `/api/health` reports that SHA. Saves the image as an artifact. |
-| **Deploy to EC2** | Waits for approval (the `production` environment). Then it pushes *the same image* to ECR and runs [`scripts/deploy.sh`](scripts/deploy.sh) on the instance through SSM Run Command. Finally it checks that the public URL serves the new SHA. |
+| Job               | What it does                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Test**          | `gofmt` check, `go vet`, `go test -race` with coverage (shown in the run summary)                                                                                                                                                              |
+| **Build image**   | Builds the Docker image with the commit SHA baked in, runs it, and checks that `/api/health` reports that SHA. Saves the image as an artifact.                                                                                                 |
+| **Deploy to EC2** | Waits for approval (the `production` environment). Then it pushes _the same image_ to ECR and runs [`scripts/deploy.sh`](scripts/deploy.sh) on the instance through SSM Run Command. Finally it checks that the public URL serves the new SHA. |
 
 Security notes:
 
@@ -140,16 +165,16 @@ Security notes:
 
 ### One-time GitHub setup
 
-1. **Approval gate.** Go to Settings → Environments → **New environment** → `production`. Tick **Required reviewers** and add yourself (leave "Prevent self-review" unticked if you're the only reviewer). Optionally, under *Deployment branches*, allow only `main`.
+1. **Approval gate.** Go to Settings → Environments → **New environment** → `production`. Tick **Required reviewers** and add yourself (leave "Prevent self-review" unticked if you're the only reviewer). Optionally, under _Deployment branches_, allow only `main`.
 2. **Variables.** Go to Settings → Secrets and variables → Actions → **Variables** and add the following (all printed by `terraform output`):
 
-   | Variable | Example |
-   | --- | --- |
-   | `AWS_REGION` | `ap-southeast-1` |
-   | `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/currency-watcher-github-deploy` |
-   | `ECR_REPOSITORY` | `currency-watcher` |
-   | `EC2_INSTANCE_ID` | `i-0123456789abcdef0` |
-   | `API_URL` | `http://<elastic-ip>` |
+   | Variable          | Example                                                         |
+   | ----------------- | --------------------------------------------------------------- |
+   | `AWS_REGION`      | `ap-southeast-1`                                                |
+   | `AWS_ROLE_ARN`    | `arn:aws:iam::123456789012:role/currency-watcher-github-deploy` |
+   | `ECR_REPOSITORY`  | `currency-watcher`                                              |
+   | `EC2_INSTANCE_ID` | `i-0123456789abcdef0`                                           |
+   | `API_URL`         | `http://<elastic-ip>`                                           |
 
    None of these are secrets, so they are stored as variables and can be read in the logs.
 
