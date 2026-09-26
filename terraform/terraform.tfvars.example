@@ -7,5 +7,8 @@ instance_type     = "t3.micro"
 app_port          = 8080
 host_port         = 80
 github_repository = "2103Sanjay/currency-watcher-be"
+# From https://api.github.com/repos/<owner>/<name>: "owner.id" and "id".
+github_owner_id      = 133321022
+github_repository_id = 1388870848
 allowed_origins   = ["http://localhost:5173"]
 cache_ttl         = "1h"

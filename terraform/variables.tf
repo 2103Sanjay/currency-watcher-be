@@ -107,6 +107,23 @@ variable "github_repository" {
   }
 }
 
+# GitHub puts these immutable numeric IDs into the OIDC token subject, e.g.
+# repo:owner@<owner_id>/name@<repository_id>:environment:production, so the
+# role can't be taken over by someone re-registering a renamed repo's name.
+# Look them up with:
+#   curl https://api.github.com/repos/<owner>/<name>   (fields "owner.id" and "id")
+variable "github_owner_id" {
+  description = "Numeric ID of the GitHub repository owner (user or organisation)."
+  type        = number
+  default     = 133321022
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the GitHub repository."
+  type        = number
+  default     = 1388870848
+}
+
 variable "github_environment" {
   description = "GitHub Actions environment whose jobs may assume the deploy role."
   type        = string
