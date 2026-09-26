@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (git-ignored) and adjust. Every value has a default
+# in variables.tf, so this file is optional.
+
+aws_region        = "ap-south-1"
+environment       = "prod"
+instance_type     = "t3.micro"
+app_port          = 8080
+host_port         = 80
+github_repository = "2103Sanjay/currency-watcher-be"
+allowed_origins   = ["http://localhost:5173"]
+cache_ttl         = "1h"

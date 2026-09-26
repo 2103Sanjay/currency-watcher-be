@@ -1,0 +1,33 @@
+#!/bin/bash
+# First-boot setup for the Currency Watcher host (runs once, as root).
+set -euo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+
+install -d -m 0755 /etc/currency-watcher
+
+# Host settings read by the deploy script.
+cat > /etc/currency-watcher/host.env <<'EOF'
+HOST_PORT=${host_port}
+CONTAINER_PORT=${app_port}
+EOF
+
+# Runtime configuration passed to the API container.
+cat > /etc/currency-watcher/app.env <<'EOF'
+ALLOWED_ORIGINS=${allowed_origins}
+CACHE_TTL=${cache_ttl}
+EOF
+chmod 0600 /etc/currency-watcher/app.env
+
+# Keep a copy of the deploy script on the host for manual use.
+cat > /usr/local/bin/currency-watcher-deploy <<'DEPLOY_SCRIPT_EOF'
+${deploy_script}
+DEPLOY_SCRIPT_EOF
+chmod 0755 /usr/local/bin/currency-watcher-deploy
+
+# If the pipeline has already released an image (e.g. this instance replaced an
+# older one), start it now. On a brand-new stack there is no image yet, and the
+# first CI/CD run deploys it.
+IMAGE='${image}' AWS_REGION='${aws_region}' /usr/local/bin/currency-watcher-deploy \
+  || echo "No image released yet; waiting for the CI/CD pipeline to deploy."

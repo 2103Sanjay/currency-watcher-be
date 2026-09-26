@@ -1,0 +1,35 @@
+# Go
+bin/
+*.exe
+*.test
+*.out
+coverage.*
+*.log
+
+# Environment files (keep the example)
+.env
+.env.*
+!.env.example
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*.tfplan
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

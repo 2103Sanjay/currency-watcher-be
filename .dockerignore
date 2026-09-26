@@ -1,0 +1,15 @@
+# Only go.mod, go.sum, cmd/ and internal/ are needed to build the image.
+.git
+.github
+.gitignore
+.gitattributes
+.dockerignore
+Dockerfile
+*.md
+test/
+terraform/
+scripts/
+backend/
+*.exe
+*.log
+.env*
